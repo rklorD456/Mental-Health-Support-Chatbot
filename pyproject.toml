@@ -8,4 +8,5 @@ dependencies = [
     "dotenv>=0.9.9",
     "groq>=1.4.0",
     "openai>=2.41.0",
+    "qdrant-client>=1.18.0",
 ]
