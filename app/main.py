@@ -8,9 +8,9 @@ from dotenv import load_dotenv
 
 from transformers import pipeline
 import torch
-from intent_classifier import get_intent
+from app.intent_classifier import get_intent
 from openai import OpenAI
-from rag_retriever import get_rag_response
+from app.rag_retriever import get_rag_response
 
 load_dotenv()
 
