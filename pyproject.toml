@@ -3,10 +3,24 @@ name = "final-project"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10, <3.13"
 dependencies = [
+    "datasets",
     "dotenv>=0.9.9",
+    "fastapi>=0.136.3",
     "groq>=1.4.0",
     "openai>=2.41.0",
     "qdrant-client>=1.18.0",
+    "sentence-transformers>=5.5.1",
+    "streamlit>=1.58.0",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu121" }
+torchvision = { index = "pytorch-cu121" }
+torchaudio = { index = "pytorch-cu121" }
