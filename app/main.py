@@ -2,7 +2,9 @@ import os
 import joblib
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -13,6 +15,7 @@ from openai import OpenAI
 from app.rag_retriever import get_rag_response
 
 load_dotenv()
+templates = Jinja2Templates(directory="D:\\iti\\Technical\\NLP\\final project\\templates")
 
 groq_client = OpenAI(
     api_key=os.getenv("GROQ_API_KEY"),
@@ -26,7 +29,7 @@ async def lifespan(app: FastAPI):
     """Lifespan function to load models at startup and clean up if necessary on shutdown."""
     
     print("Loading language detection model...")
-    models["language"] = joblib.load("./models/language_detector_v1.1.joblib")
+    models["language"] = joblib.load("D:\\iti\\Technical\\NLP\\final project\\models\\language_detector_v1.1.joblib")
  
     print("Loading emotion classification model...")
 
@@ -34,8 +37,8 @@ async def lifespan(app: FastAPI):
     
     models["emotion"] = pipeline(
         "text-classification",
-        model="./models/distilbert-emotion-final",
-        tokenizer="./models/distilbert-emotion-final",
+        model="D:\\iti\\Technical\\NLP\\final project\\models\\distilbert-emotion-final",
+        tokenizer="D:\\iti\\Technical\\NLP\\final project\\models\\distilbert-emotion-final",
         device=device,
         truncation=True,
         max_length=512
@@ -147,9 +150,9 @@ DIRECT_RESPONSES = {
     "out_of_scope": "I am a mental health assistant. I cannot help with coding, general trivia, or physical medical advice. How can I support your mental well-being today?"
 }
 
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to the Mental Health Support Chatbot API."}
+@app.get("/", response_class=HTMLResponse)
+def read_root(request: Request):
+    return templates.TemplateResponse(request,"index.html", {"request": request})
 
 @app.get("/health")
 def health_check():

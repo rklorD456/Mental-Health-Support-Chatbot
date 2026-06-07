@@ -23,7 +23,7 @@ qdrant_client = QdrantClient(
 # 2. Load the exact same embedding model
 embedding_model = SentenceTransformer("BAAI/bge-base-en-v1.5")
 COLLECTION_NAME = "mental_health_knowledge_base"
-model_name = "openai/gpt-oss-20b"
+model_name = "openai/gpt-oss-120b"
 temperature = 0.3
 
 EMOTION_TONE_MAP = {
@@ -69,7 +69,7 @@ def get_rag_response(user_message: str, emotion: str = "neutral") -> str:
         return "I am having trouble accessing my knowledge base right now."
 
     # Extract the text answers from the vector payloads
-    retrieved_contexts = [hit.payload.get("answer", "") for hit in search_results]
+    retrieved_contexts = [str(hit.payload.get("answer", ""))[:1500] + "..." for hit in search_results]
     context_string = "\n\n---\n\n".join(retrieved_contexts)
     
    

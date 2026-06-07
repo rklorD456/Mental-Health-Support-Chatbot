@@ -49,7 +49,10 @@ Examples:
 Text: "Hi, good morning!"
 {"intent": "greeting"}
 
-Text: "I have been feeling really overwhelmed and stressed out lately."
+Text: "I am so stressed because my Python code won't run."
+{"intent": "out_of_scope"}
+
+Text: "I am so angry right now! My professor gave me a failing grade and it is completely unfair!"
 {"intent": "asking_mental_health_question"}
 """
 
