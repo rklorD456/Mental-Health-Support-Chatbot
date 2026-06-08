@@ -11,7 +11,18 @@ class Settings:
     groq_base_url = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
     qdrant_url = os.getenv("QDRANT_URL", "")
     qdrant_api_key = os.getenv("QDRANT_API_KEY", "")
+    lightning_api_key = os.getenv("LIGHTNING_API_KEY", "")
+    lightning_base_url = os.getenv("LIGHTNING_BASE_URL", "https://lightning.ai/api/v1")
+    
+    ## what model i wan to use for RAG
+    model_used_api = lightning_api_key
+    model_used_base_url = lightning_base_url
+    model_used_name = "openai/gpt-4o"
+    ## for embedding
     embedding_model_name = "BAAI/bge-base-en-v1.5"
+    collection_name = "mental_health_knowledge_base"
+    temperature = 0.3
+    
     
     abs_language_model_path = PROJECT_ROOT / "models" / "language_detector_v1.1.joblib"
     abs_emotion_model_path = PROJECT_ROOT / "models" / "distilbert-emotion-final"

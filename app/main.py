@@ -1,4 +1,3 @@
-import os
 import joblib
 from contextlib import asynccontextmanager
 
@@ -18,9 +17,9 @@ load_dotenv()
 settings = get_settings()
 templates = Jinja2Templates(directory=str(settings.templates_dir))
 
-groq_client = OpenAI(
-    api_key=settings.groq_api_key,
-    base_url=settings.groq_base_url,
+client = OpenAI(
+    api_key=settings.model_used_api,
+    base_url=settings.model_used_base_url,
 )
 
 models: dict = {}
@@ -29,8 +28,8 @@ models: dict = {}
 async def lifespan(app: FastAPI):
     """Lifespan function to load models at startup and clean up if necessary on shutdown."""
 
-    if not settings.groq_api_key or not settings.groq_base_url:
-        raise ValueError("GROQ API Key or Base URL not found in environment variables.")
+    if not settings.model_used_api or not settings.model_used_base_url:
+        raise ValueError("Model API Key or Base URL not found in environment variables.")
     
     print("Loading language detection model...")
     models["language"] = joblib.load(settings.abs_language_model_path)

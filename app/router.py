@@ -1,7 +1,14 @@
 from app.intent_classifier import get_intent
 from app.rag_retriever import get_rag_response
+from app.config import get_settings
+from openai import OpenAI
 import app.main as main
+settings = get_settings()
 
+client = OpenAI(
+    api_key=settings.model_used_api,
+    base_url=settings.model_used_base_url,
+)
 
 DIRECT_RESPONSES = {
     "greeting": "Hello! I am here to listen. How are you doing today?",
@@ -56,8 +63,8 @@ def translate_to_english(text: str, source_lang: str) -> str:
         str: The translated text in English.
     """
     try:
-        response = main.groq_client.chat.completions.create(
-            model="openai/gpt-oss-20b",
+        response = client.chat.completions.create(
+            model=settings.model_used_name,
             temperature=0.0,
             messages=[
                 {"role": "system", "content": "You are a highly accurate translator. Translate the input text into English. Output ONLY the final English translation. Do not include any notes, quotes, explanations, or extra punctuation."},
@@ -73,9 +80,9 @@ def translate_to_english(text: str, source_lang: str) -> str:
 def translate_from_english(text: str, target_language: str) -> str:
     """Translates the final English response back to the user's native language code/name."""
     try:
-        response = main.groq_client.chat.completions.create(
-            model="openai/gpt-oss-20b",
-            temperature=0.3,
+        response = client.chat.completions.create(
+            model=settings.model_used_name,
+            temperature=0.0,
             messages=[
                 {"role": "system", "content": f"Translate the following mental health response into the language specified: '{target_language}'. Maintain a warm, highly empathetic, and professional tone. Output ONLY the translation without any notes or metadata."},
                 {"role": "user", "content": text}

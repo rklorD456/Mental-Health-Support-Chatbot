@@ -3,28 +3,30 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from qdrant_client import QdrantClient
 from sentence_transformers import SentenceTransformer
+from app.config import get_settings
 
+settings = get_settings()
 load_dotenv()
 
 print("Initializing RAG pipeline...")
 
 # Setup Clients
 groq_client = OpenAI(
-    api_key=os.getenv("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1",
+    api_key=settings.model_used_api,
+    base_url=settings.model_used_base_url,
 )
 
 qdrant_client = QdrantClient(
-    url=os.getenv("QDRANT_URL"),
-    api_key=os.getenv("QDRANT_API_KEY"),
+    url=settings.qdrant_url,
+    api_key=settings.qdrant_api_key,
     cloud_inference=True
 )
 
 # 2. Load the exact same embedding model
-embedding_model = SentenceTransformer("BAAI/bge-base-en-v1.5")
-COLLECTION_NAME = "mental_health_knowledge_base"
-model_name = "openai/gpt-oss-120b"
-temperature = 0.3
+embedding_model = SentenceTransformer(settings.embedding_model_name)
+COLLECTION_NAME = settings.collection_name
+model_name = settings.model_used_name
+temperature = settings.temperature
 
 EMOTION_TONE_MAP = {
     "sadness":  "The user is feeling sad. Be especially gentle, validating, and warm.",
