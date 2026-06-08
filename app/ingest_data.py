@@ -17,12 +17,13 @@ print("1. Connecting to Qdrant and loading Sentence Transformer...")
 qdrant_client = QdrantClient(
     url=os.getenv("QDRANT_URL"),
     api_key=os.getenv("QDRANT_API_KEY"),
-    cloud_inference=True
 )
 
 # Load the model
 print("Loading BGE model...")
 embedding_model = SentenceTransformer("BAAI/bge-base-en-v1.5")
+
+
 
 if not qdrant_client.collection_exists(COLLECTION_NAME):
     print("Creating collection...")

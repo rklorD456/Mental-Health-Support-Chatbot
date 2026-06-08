@@ -35,7 +35,7 @@ This project implements a **mental health support chatbot** that leverages:
 3. **Language Detection**: Supports multi-language input detection
 4. **RAG Pipeline**: Retrieves relevant mental health conversations from a vector database to provide informed, context-aware responses
 
-The system is built with **FastAPI** for the backend and includes a web UI powered by Jinja2 templates. It uses the **Groq API** for efficient LLM inference and **Qdrant** vector database for semantic search over mental health conversation data.
+The system is built with **FastAPI** for the backend and includes a web UI powered by Jinja2 templates. It uses the **Lightning AI API** (OpenAI-compatible, `openai/gpt-4o`) for LLM inference and **Qdrant** vector database for semantic search over mental health conversation data.
 
 ## 🏗️ Architecture
 
@@ -93,8 +93,8 @@ User Response + Metadata
 | Component | Technology |
 |-----------|-----------|
 | **Backend Framework** | FastAPI 0.136+ |
-| **LLM Integration** | Groq API + OpenAI-compatible client |
-| **Intent Classification** | Groq's language model (gpt-oss-20b) |
+| **LLM Integration** | Lightning AI API + OpenAI-compatible client |
+| **Intent Classification** | OpenAI GPT-4o via Lightning AI |
 | **Emotion Detection** | DistilBERT (fine-tuned custom model) |
 | **Language Detection** | scikit-learn LabelBinarizer |
 | **Embeddings** | Sentence Transformers (BAAI/bge-base-en-v1.5) |
@@ -113,15 +113,12 @@ Mental-Health-Support-Chatbot/
 ├── test_emotion.py                    # Test script for emotion detection
 │
 ├── app/                               # Main application package
-│   ├── main.py                        # FastAPI app with endpoints
+│   ├── main.py                        # FastAPI app with endpoints & model loading
 │   ├── config.py                      # Configuration & settings management
-│   ├── dependencies.py                # Shared dependencies
 │   ├── schemas.py                     # Pydantic models for requests/responses
 │   ├── intent_classifier.py           # Intent classification logic
-│   ├── emotion_detector.py            # Emotion detection module
-│   ├── language_detector.py           # Language identification
 │   ├── rag_retriever.py              # RAG pipeline implementation
-│   ├── router.py                      # Chat message routing & orchestration
+│   ├── router.py                      # Chat routing, emotion/language detection & translation
 │   └── ingest_data.py                 # Data ingestion script for Qdrant
 │
 ├── models/                            # Pre-trained models
@@ -161,14 +158,14 @@ Mental-Health-Support-Chatbot/
 
 2. **Create environment file** (`.env`):
    ```bash
-   cp .env.example .env
+   copy .env.example .env   # Windows
+   # cp .env.example .env   # Linux/macOS
    ```
 
 3. **Configure environment variables** in `.env`:
    ```env
-   # Groq API Configuration
-   GROQ_API_KEY=your_groq_api_key_here
-   GROQ_BASE_URL=https://api.groq.com/openai/v1
+   # Lightning AI API (used for intent classification, RAG, and translation)
+   LIGHTNING_API_KEY=your_lightning_api_key_here
 
    # Qdrant Vector Database Configuration
    QDRANT_URL=https://your-qdrant-cloud-url.qdrant.io
@@ -190,11 +187,21 @@ Configuration is centralized in [config.py](app/config.py):
 
 ```python
 class Settings:
-    groq_api_key              # Groq API key for LLM
-    groq_base_url             # Groq API endpoint
+    # API credentials
+    lightning_api_key          # Lightning AI API key
+    lightning_base_url         # Lightning AI endpoint
     qdrant_url                # Qdrant cloud URL
     qdrant_api_key            # Qdrant API key
+
+    # Model configuration
+    model_used_api            # Active LLM API key (points to lightning_api_key)
+    model_used_base_url       # Active LLM base URL (points to lightning_base_url)
+    model_used_name           # "openai/gpt-4o"
     embedding_model_name      # "BAAI/bge-base-en-v1.5"
+    collection_name           # "mental_health_knowledge_base"
+    temperature               # 0.3
+
+    # Paths
     abs_language_model_path   # Path to language detector model
     abs_emotion_model_path    # Path to emotion classifier model
     templates_dir             # Templates directory path
@@ -276,7 +283,7 @@ Classifies user messages into one of five intent categories using Groq's languag
 | `out_of_scope` | Questions outside mental health domain |
 
 **Key Features:**
-- Uses `openai/gpt-oss-20b` model via Groq API
+- Uses `openai/gpt-4o` model via Lightning AI API
 - Zero temperature (deterministic output)
 - Strict JSON output format validation
 - Priority handling: Mental health questions prioritized over other intents
@@ -352,7 +359,7 @@ Implements Retrieval-Augmented Generation for context-aware responses:
 
 **Key Features:**
 - Emotion-aware tone mapping (sadness → gentle, anger → validating, etc.)
-- Uses `openai/gpt-oss-120b` model for response generation
+- Uses `openai/gpt-4o` model for response generation
 - Temperature 0.3 for balanced creativity and consistency
 - Includes metadata from retrieved conversations for better context
 
@@ -551,7 +558,7 @@ The system includes graceful fallbacks:
 - **Data Privacy**: When deploying, ensure compliance with mental health data regulations
 - **Crisis Handling**: The intent classifier explicitly avoids providing crisis responses; route emergencies to appropriate resources
 - **Model Updates**: Both emotion and language models can be retrained with new data using the notebooks
-- **Multi-language Support**: Language detection is in place; full translation pipelines can be added
+- **Multi-language Support**: Full translation pipeline is implemented — non-English input is translated to English for processing, and responses are translated back to the user's language
 - **Monitoring**: Integrate with observability tools for production monitoring
 
 ---

@@ -1,31 +1,15 @@
-import os
-import sys
 import time
 import json
-from openai import OpenAI
-from pydantic import BaseModel, ValidationError
-from typing import Literal
+from pydantic import ValidationError
+from app.config import get_settings
+from app.schemas import IntentResponse
+import app.main as main
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
-class IntentResponse(BaseModel):
-    intent: Literal[
-        "greeting",
-        "goodbye",
-        "gratitude",
-        "asking_mental_health_question",
-        "out_of_scope"
-    ]
-    
-client = OpenAI(
-    api_key=os.environ.get("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1",
-)
+settings = get_settings()
 
 
-MODEL_NAME    = "openai/gpt-oss-20b"
+
+MODEL_NAME    = settings.model_used_name
 TEMPERATURE   = 0.0
 
 
@@ -72,6 +56,8 @@ def get_intent(user_message: str, retries: int = 3) -> str:
     """
     formatted_input = f"Classify this text:\n\n<text>{user_message}</text>"
     
+    client = main.models["llm_client"]
+    
     for attempt in range(retries):
         try:
             response = client.chat.completions.create(
@@ -103,17 +89,23 @@ def get_intent(user_message: str, retries: int = 3) -> str:
 
     return "out_of_scope"
 
-# Optional: Quick local test block (won't run when imported elsewhere)
+# Testing: Quick local test block (won't run when imported elsewhere)
 if __name__ == "__main__":
+    import sys
+    from openai import OpenAI
+    main.models["llm_client"] = OpenAI(
+        api_key=settings.model_used_api,
+        base_url=settings.model_used_base_url,
+    )
     if len(sys.argv) > 1:
         test_msg = " ".join(sys.argv[1:])
         result = get_intent(test_msg)
         print(f"Message: {test_msg}")
         print(f"Intent:  {result}")
-    
 
     else:
         test_message = "I have been feeling really overwhelmed and stressed out lately."
         result = get_intent(test_message)
         print(f"Message: {test_message}")
         print(f"Intent:  {result}")
+

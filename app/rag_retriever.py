@@ -1,32 +1,9 @@
-import os
-from dotenv import load_dotenv
-from openai import OpenAI
-from qdrant_client import QdrantClient
-from sentence_transformers import SentenceTransformer
 from app.config import get_settings
+import app.main as main
 
 settings = get_settings()
-load_dotenv()
 
-print("Initializing RAG pipeline...")
-
-# Setup Clients
-groq_client = OpenAI(
-    api_key=settings.model_used_api,
-    base_url=settings.model_used_base_url,
-)
-
-qdrant_client = QdrantClient(
-    url=settings.qdrant_url,
-    api_key=settings.qdrant_api_key,
-    cloud_inference=True
-)
-
-# 2. Load the exact same embedding model
-embedding_model = SentenceTransformer(settings.embedding_model_name)
 COLLECTION_NAME = settings.collection_name
-model_name = settings.model_used_name
-temperature = settings.temperature
 
 EMOTION_TONE_MAP = {
     "sadness":  "The user is feeling sad. Be especially gentle, validating, and warm.",
@@ -39,7 +16,7 @@ EMOTION_TONE_MAP = {
  
 
 def get_rag_response(user_message: str, emotion: str = "neutral") -> str:
-    """Takes a user message, retrieves relevant context from Qdrant, and generates a response using Groq.
+    """Takes a user message, retrieves relevant context from Qdrant, and generates a response.
     
     Args:
         user_message (str): 
@@ -51,6 +28,9 @@ def get_rag_response(user_message: str, emotion: str = "neutral") -> str:
             The generated response from the RAG pipeline.
         
         """
+    embedding_model = main.models["embedding"]
+    qdrant_client = main.models["qdrant_client"]
+    llm_client = main.models["llm_client"]
     
     # Vectorize the User Query
     query_instruction = "Represent this sentence for searching relevant passages:"
@@ -92,9 +72,9 @@ def get_rag_response(user_message: str, emotion: str = "neutral") -> str:
     )
 
     try:
-        response = groq_client.chat.completions.create(
-            model=model_name,
-            temperature=temperature,
+        response = llm_client.chat.completions.create(
+            model=settings.model_used_name,
+            temperature=settings.temperature,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
@@ -102,11 +82,25 @@ def get_rag_response(user_message: str, emotion: str = "neutral") -> str:
         )
         return response.choices[0].message.content
     except Exception as e:
-        print(f"[ERROR] Groq generation failed: {e}")
+        print(f"[ERROR] LLM generation failed: {e}")
         return "I apologize, but I am currently experiencing a system error."
 
 if __name__ == "__main__":
-    # Test the pipeline
+    # Standalone test — creates its own clients
+    from openai import OpenAI
+    from qdrant_client import QdrantClient
+    from sentence_transformers import SentenceTransformer
+    
+    main.models["llm_client"] = OpenAI(
+        api_key=settings.model_used_api,
+        base_url=settings.model_used_base_url,
+    )
+    main.models["qdrant_client"] = QdrantClient(
+        url=settings.qdrant_url,
+        api_key=settings.qdrant_api_key,
+    )
+    main.models["embedding"] = SentenceTransformer(settings.embedding_model_name)
+    
     test_query = "I have been feeling really overwhelmed with my studies and stressed out lately."
     
     print(f"\nUser: {test_query}\n")
