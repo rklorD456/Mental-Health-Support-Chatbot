@@ -1,13 +1,13 @@
-import os
+# Standard library
 import uuid
-from dotenv import load_dotenv
-from datasets import load_dataset
 
+# Third-party
+from datasets import load_dataset
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
-
 from sentence_transformers import SentenceTransformer
 
+# Local
 from app.config import get_settings
 
 settings = get_settings()

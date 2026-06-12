@@ -1,9 +1,14 @@
-import time
+# Standard library
 import json
+import time
+
+# Third-party
 from pydantic import ValidationError
+
+# Local
+import app.main as main
 from app.config import get_settings
 from app.schemas import IntentResponse
-import app.main as main
 
 settings = get_settings()
 

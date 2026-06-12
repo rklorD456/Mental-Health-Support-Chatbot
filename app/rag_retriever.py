@@ -1,5 +1,6 @@
-from app.config import get_settings
+# Local
 import app.main as main
+from app.config import get_settings
 
 settings = get_settings()
 

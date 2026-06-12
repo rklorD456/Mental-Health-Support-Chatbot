@@ -1,15 +1,18 @@
-import joblib
+# Standard library
 from contextlib import asynccontextmanager
 
+# Third-party
+import joblib
+import torch
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from fastapi import FastAPI, HTTPException, Request
-
-from transformers import pipeline
-import torch
 from openai import OpenAI
 from qdrant_client import QdrantClient
-from sentence_transformers import SentenceTransformer, CrossEncoder
+from sentence_transformers import CrossEncoder, SentenceTransformer
+from transformers import pipeline
+
+# Local
 from app.config import get_settings
 from app.schemas import ChatRequest, ChatResponse
 
