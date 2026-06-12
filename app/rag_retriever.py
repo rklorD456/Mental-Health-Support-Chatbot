@@ -147,7 +147,7 @@ def _rerank(query: str, candidates: list[tuple], top_n: int = 3) -> list[tuple]:
 # ---------------------------------------------------------------------------
 # 5. Main RAG response function  (hybrid → RRF → rerank → generate)
 # ---------------------------------------------------------------------------
-def get_rag_response(user_message: str, emotion: str = "neutral") -> str:
+def get_rag_response(user_message: str, emotion: str = "neutral", history: list[dict] | None = None) -> str:
     """Takes a user message, retrieves relevant context from Qdrant, and generates a response.
 
     Pipeline:
@@ -162,10 +162,15 @@ def get_rag_response(user_message: str, emotion: str = "neutral") -> str:
             The input message from the user.
         emotion (str):
             The detected emotion of the user.
+        history (list[dict] | None):
+            Previous conversation turns as [{"role": "user"|"assistant", "content": str}, ...].
     Returns:
         str:
             The generated response from the RAG pipeline.
     """
+    if history is None:
+        history = []
+
     embedding_model = main.models["embedding"]
     qdrant_client = main.models["qdrant_client"]
     llm_client = main.models["llm_client"]
@@ -228,13 +233,15 @@ def get_rag_response(user_message: str, emotion: str = "neutral") -> str:
     )
 
     try:
+        # Build messages: system prompt → conversation history → current user message
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(history)
+        messages.append({"role": "user", "content": user_message})
+
         response = llm_client.chat.completions.create(
             model=settings.model_used_name,
             temperature=settings.temperature,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ]
+            messages=messages,
         )
         return response.choices[0].message.content
     except Exception as e:

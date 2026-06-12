@@ -13,6 +13,11 @@ DIRECT_RESPONSES = {
     "out_of_scope": "I am a mental health assistant. I cannot help with coding, general trivia, or physical medical advice. How can I support your mental well-being today?"
 }
 
+# In-memory conversation history keyed by session_id.
+# Each value is a list of {"role": "user"|"assistant", "content": str} dicts.
+MAX_HISTORY_TURNS = 10  # keep the last N exchanges (user + assistant = 2 msgs each)
+conversation_history: dict[str, list[dict]] = {}
+
 
 def detect_language(text: str) -> str:
     """Detects the language of the input text using a pre-trained model.
@@ -90,7 +95,7 @@ def translate_from_english(text: str, target_language: str) -> str:
         return text   
 
 
-def process_chat(user_message: str) -> dict:
+def process_chat(user_message: str, session_id: str = "") -> dict:
     language = detect_language(user_message).lower()
     
     if str(language) != 'en':
@@ -104,10 +109,22 @@ def process_chat(user_message: str) -> dict:
     print(f"[DEBUG] lang={language} | emotion={emotion} | intent={intent}")
     print(f"[DEBUG] message='{user_message}'")
     
+    # Get conversation history for this session
+    history = conversation_history.get(session_id, []) if session_id else []
+    
     if intent == "asking_mental_health_question":
-        response_text = get_rag_response(user_message, emotion=emotion)
+        response_text = get_rag_response(user_message, emotion=emotion, history=history)
     else:
         response_text = DIRECT_RESPONSES.get(intent, DIRECT_RESPONSES["out_of_scope"])
+    
+    # Save this exchange to conversation history
+    if session_id:
+        if session_id not in conversation_history:
+            conversation_history[session_id] = []
+        conversation_history[session_id].append({"role": "user", "content": user_message})
+        conversation_history[session_id].append({"role": "assistant", "content": response_text})
+        # Trim to keep only the last N turns (each turn = 2 messages)
+        conversation_history[session_id] = conversation_history[session_id][-(MAX_HISTORY_TURNS * 2):]
     
     if str(language) != 'en':
         response_text = translate_from_english(response_text, target_language=language)

@@ -95,11 +95,12 @@ def health_check():
 @app.post('/chat', response_model=ChatResponse)
 async def chat(request: ChatRequest):
     user_message = request.message
+    session_id = request.session_id
     
     if not user_message.strip():
         raise HTTPException(status_code=400, detail="Input message cannot be empty.")
     
     from app.router import process_chat
-    result = process_chat(user_message)
+    result = process_chat(user_message, session_id=session_id)
         
     return ChatResponse(**result)
