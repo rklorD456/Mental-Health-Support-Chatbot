@@ -8,15 +8,17 @@ from qdrant_client.http import models
 
 from sentence_transformers import SentenceTransformer
 
-load_dotenv()
+from app.config import get_settings
+
+settings = get_settings()
 
 COLLECTION_NAME = "mental_health_knowledge_base"
 BATCH_SIZE = 100 
 
 print("1. Connecting to Qdrant and loading Sentence Transformer...")
 qdrant_client = QdrantClient(
-    url=os.getenv("QDRANT_URL"),
-    api_key=os.getenv("QDRANT_API_KEY"),
+    url=settings.qdrant_url,
+    api_key=settings.qdrant_api_key,
 )
 
 # Load the model
@@ -28,7 +30,7 @@ embedding_model = SentenceTransformer("BAAI/bge-base-en-v1.5")
 if not qdrant_client.collection_exists(COLLECTION_NAME):
     print("Creating collection...")
     qdrant_client.create_collection(
-        collection_name=COLLECTION_NAME,
+        collection_name=settings.collection_name,
         vectors_config=models.VectorParams(size=768, distance=models.Distance.COSINE),
     )
 else:
