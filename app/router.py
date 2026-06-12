@@ -101,7 +101,7 @@ def process_chat(user_message: str) -> dict:
     intent = get_intent(user_message)
     
     print(f"[DEBUG] lang={language} | emotion={emotion} | intent={intent}")
-    print(f"[DEBUG] message='{user_message[:80]}'")
+    print(f"[DEBUG] message='{user_message}'")
     
     if intent == "asking_mental_health_question":
         response_text = get_rag_response(user_message, emotion=emotion)

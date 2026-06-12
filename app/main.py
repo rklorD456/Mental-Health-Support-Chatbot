@@ -9,7 +9,7 @@ from transformers import pipeline
 import torch
 from openai import OpenAI
 from qdrant_client import QdrantClient
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 from app.config import get_settings
 from app.schemas import ChatRequest, ChatResponse
 
@@ -59,6 +59,10 @@ async def lifespan(app: FastAPI):
         truncation=True,
         max_length=512
     )
+    
+    # Cross-encoder model for reranking in hybrid retrieval
+    print("Loading cross-encoder reranking model...")
+    models["cross_encoder"] = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
     
     print("All models loaded. API is ready.\n")
     
