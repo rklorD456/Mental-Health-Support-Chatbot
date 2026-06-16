@@ -1,10 +1,11 @@
-"""
-Updated main.py — uses the new package structure.
+"""Main FastAPI application entry point.
 
 All model/client initialisation happens in the lifespan context and is stored
 on ``AppState``.  Downstream modules receive the state via dependency injection
 instead of importing ``src.main`` directly.
 """
+import os
+os.environ["HF_HUB_OFFLINE"] = "1"
 
 from contextlib import asynccontextmanager
 
@@ -18,13 +19,15 @@ from transformers import pipeline
 from src.config import get_settings
 from src.core.schemas import ChatRequest, ChatResponse
 from src.database.qdrant import get_qdrant_client
+
 from src.rag.embedder import SentenceTransformerEmbedder
 from src.rag.retriever import HybridQdrantRetriever
 from src.rag.reranker import CrossEncoderReranker
 from src.rag.pipeline import RAGPipeline
+
 from src.services.llm import get_llm_client
 from src.services.classifier import ClassifierService
-
+from src.services.translator import TranslatorService
 
 settings = get_settings()
 templates = Jinja2Templates(directory=str(settings.templates_dir))
@@ -33,6 +36,7 @@ templates = Jinja2Templates(directory=str(settings.templates_dir))
 class AppState:
     rag_pipeline: RAGPipeline
     classifier: ClassifierService
+    translator: TranslatorService
     llm_client: object  # openai.OpenAI
 
 
@@ -65,12 +69,14 @@ async def lifespan(app: FastAPI):
     state.rag_pipeline = RAGPipeline(retriever, reranker, state.llm_client, settings)
 
     print("Loading language detection model...")
+    state.translator = TranslatorService(llm_client=state.llm_client, model_name=settings.model_used_name)
+    
     print("Loading emotion classification model...")
-    device = 0 if torch.cuda.is_available() else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     state.classifier = ClassifierService(
         language_model_path=str(settings.abs_language_model_path),
         emotion_model_path=str(settings.abs_emotion_model_path),
-        device=device,
+        device=device, #type: ignore
     )
 
     print("All models loaded. API is ready.\n")
@@ -97,7 +103,7 @@ def health_check():
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+def chat(request: ChatRequest):
     user_message = request.message
     session_id = request.session_id
 
