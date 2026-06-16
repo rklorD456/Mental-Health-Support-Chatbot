@@ -13,8 +13,8 @@ from sentence_transformers import CrossEncoder, SentenceTransformer
 from transformers import pipeline
 
 # Local
-from app.config import get_settings
-from app.schemas import ChatRequest, ChatResponse
+from src.config import get_settings
+from src.schemas import ChatRequest, ChatResponse
 
 settings = get_settings()
 templates = Jinja2Templates(directory=str(settings.templates_dir))
@@ -100,7 +100,7 @@ async def chat(request: ChatRequest):
     if not user_message.strip():
         raise HTTPException(status_code=400, detail="Input message cannot be empty.")
     
-    from app.router import process_chat
+    from src.router import process_chat
     result = process_chat(user_message, session_id=session_id)
         
     return ChatResponse(**result)

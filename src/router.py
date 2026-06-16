@@ -1,8 +1,8 @@
 # Local
-import app.main as main
-from app.config import get_settings
-from app.intent_classifier import get_intent
-from app.rag_retriever import get_rag_response
+import src.main as main
+from src.config import get_settings
+from src.intent_classifier import get_intent
+from src.rag_retriever import get_rag_response
 
 settings = get_settings()
 
