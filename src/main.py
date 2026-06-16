@@ -1,79 +1,83 @@
-# Standard library
+"""
+Updated main.py — uses the new package structure.
+
+All model/client initialisation happens in the lifespan context and is stored
+on ``AppState``.  Downstream modules receive the state via dependency injection
+instead of importing ``src.main`` directly.
+"""
+
 from contextlib import asynccontextmanager
 
-# Third-party
 import joblib
 import torch
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from openai import OpenAI
-from qdrant_client import QdrantClient
-from sentence_transformers import CrossEncoder, SentenceTransformer
 from transformers import pipeline
 
-# Local
 from src.config import get_settings
-from src.schemas import ChatRequest, ChatResponse
+from src.core.schemas import ChatRequest, ChatResponse
+from src.database.qdrant import get_qdrant_client
+from src.rag.embedder import SentenceTransformerEmbedder
+from src.rag.retriever import HybridQdrantRetriever
+from src.rag.reranker import CrossEncoderReranker
+from src.rag.pipeline import RAGPipeline
+from src.services.llm import get_llm_client
+from src.services.classifier import ClassifierService
+
 
 settings = get_settings()
 templates = Jinja2Templates(directory=str(settings.templates_dir))
 
-models: dict = {}
+
+class AppState:
+    rag_pipeline: RAGPipeline
+    classifier: ClassifierService
+    llm_client: object  # openai.OpenAI
+
+
+state = AppState()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan function to load all models and clients once at startup."""
+    """Load all models and clients once at startup, yield, then shut down."""
 
     if not settings.model_used_api or not settings.model_used_base_url:
         raise ValueError("Model API Key or Base URL not found in environment variables.")
-    
-    # LLM client (shared across intent classification, RAG, and translation)
+
     print("Initializing LLM client...")
-    models["llm_client"] = OpenAI(
-        api_key=settings.model_used_api,
-        base_url=settings.model_used_base_url,
-    )
-    
-    # Qdrant vector database client
+    state.llm_client = get_llm_client()
+
     print("Connecting to Qdrant...")
-    models["qdrant_client"] = QdrantClient(
-        url=settings.qdrant_url,
-        api_key=settings.qdrant_api_key,
-    )
-    
-    # Embedding model for RAG retrieval
+    qdrant_client = get_qdrant_client()
+
     print("Loading embedding model...")
-    models["embedding"] = SentenceTransformer(settings.embedding_model_name)
-    
-    # Language detection model
+    embedder = SentenceTransformerEmbedder(settings.embedding_model_name)
+
+    print("Initializing hybrid retriever...")
+    retriever = HybridQdrantRetriever(qdrant_client, embedder, settings.collection_name)
+
+    print("Loading cross-encoder reranking model...")
+    reranker = CrossEncoderReranker("cross-encoder/ms-marco-MiniLM-L-6-v2")
+
+    print("Setting up RAG pipeline...")
+    state.rag_pipeline = RAGPipeline(retriever, reranker, state.llm_client, settings)
+
     print("Loading language detection model...")
-    models["language"] = joblib.load(settings.abs_language_model_path)
- 
-    # Emotion classification model
     print("Loading emotion classification model...")
     device = 0 if torch.cuda.is_available() else "cpu"
-    emotion_model_path = str(settings.abs_emotion_model_path)
-    models["emotion"] = pipeline(
-        "text-classification",
-        model=emotion_model_path,
-        tokenizer=emotion_model_path,
+    state.classifier = ClassifierService(
+        language_model_path=str(settings.abs_language_model_path),
+        emotion_model_path=str(settings.abs_emotion_model_path),
         device=device,
-        truncation=True,
-        max_length=512
     )
-    
-    # Cross-encoder model for reranking in hybrid retrieval
-    print("Loading cross-encoder reranking model...")
-    models["cross_encoder"] = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
-    
+
     print("All models loaded. API is ready.\n")
-    
     yield
-    # Shutdown: release resources
-    models.clear()
-    print("Models released. Shutting down.")
-    
+    print("Shutting down.")
+
+
 app = FastAPI(
     title="Mental Health Support Chatbot",
     description="RAG-based chatbot for mental health support.",
@@ -89,18 +93,18 @@ def read_root(request: Request):
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "models_loaded": list(models.keys())}
+    return {"status": "ok", "pipeline_loaded": hasattr(state, "rag_pipeline")}
 
 
-@app.post('/chat', response_model=ChatResponse)
+@app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     user_message = request.message
     session_id = request.session_id
-    
+
     if not user_message.strip():
         raise HTTPException(status_code=400, detail="Input message cannot be empty.")
-    
+
     from src.router import process_chat
-    result = process_chat(user_message, session_id=session_id)
-        
+
+    result = process_chat(user_message, session_id=session_id, app_state=state)
     return ChatResponse(**result)

@@ -3,20 +3,17 @@ import json
 import time
 
 # Third-party
+from openai import OpenAI
 from pydantic import ValidationError
 
 # Local
-import src.main as main
 from src.config import get_settings
-from src.schemas import IntentResponse
+from src.core.schemas import IntentResponse
 
 settings = get_settings()
 
-
-
-MODEL_NAME    = settings.model_used_name
-TEMPERATURE   = 0.0
-
+MODEL_NAME  = settings.model_used_name
+TEMPERATURE = 0.0
 
 SYSTEM_PROMPT = """
 You are a strict intent classification data-processor for a mental health system.
@@ -46,26 +43,31 @@ Text: "I am so angry right now! My professor gave me a failing grade and it is c
 """
 
 
+def get_llm_client() -> OpenAI:
+    """Create and return an OpenAI-compatible LLM client using application settings."""
+    return OpenAI(
+        api_key=settings.model_used_api,
+        base_url=settings.model_used_base_url,
+    )
 
-def get_intent(user_message: str, retries: int = 3) -> str:
-    """
-    Takes a user message and returns only the intent string.
-    
-    inputs:
-        - user_message: The raw text input from the user.
-        - retries: Number of times to retry the API call in case of failure.
-        
-    outputs:
-        - A string representing the classified intent, or "out_of_scope" if classification fails after retries. 
 
+def get_intent(user_message: str, llm_client: OpenAI, retries: int = 3) -> str:
+    """Classify the intent of a user message via the LLM.
+
+    Args:
+        user_message: The raw text input from the user.
+        llm_client:   An initialised OpenAI-compatible client.
+        retries:      Number of retry attempts on transient failures.
+
+    Returns:
+        A string representing the classified intent, or ``"out_of_scope"``
+        if classification fails after all retries.
     """
     formatted_input = f"Classify this text:\n\n<text>{user_message}</text>"
-    
-    client = main.models["llm_client"]
-    
+
     for attempt in range(retries):
         try:
-            response = client.chat.completions.create(
+            response = llm_client.chat.completions.create(
                 model=MODEL_NAME,
                 temperature=TEMPERATURE,
                 response_format={"type": "json_object"},
@@ -75,42 +77,20 @@ def get_intent(user_message: str, retries: int = 3) -> str:
                 ],
             )
             raw_json = response.choices[0].message.content
-            parsed_data = json.loads(raw_json) 
-
+            parsed_data = json.loads(raw_json)
             validated = IntentResponse(**parsed_data)
             return validated.intent
+
         except ValidationError:
             pass
-        
+
         except Exception as e:
-            
             if "json_validate_failed" in str(e):
                 return "asking_mental_health_question"
-                
+
             if attempt < retries - 1:
                 time.sleep(2 ** attempt)
             else:
                 return "out_of_scope"
 
     return "out_of_scope"
-
-# Testing: Quick local test block (won't run when imported elsewhere)
-if __name__ == "__main__":
-    import sys
-    from openai import OpenAI
-    main.models["llm_client"] = OpenAI(
-        api_key=settings.model_used_api,
-        base_url=settings.model_used_base_url,
-    )
-    if len(sys.argv) > 1:
-        test_msg = " ".join(sys.argv[1:])
-        result = get_intent(test_msg)
-        print(f"Message: {test_msg}")
-        print(f"Intent:  {result}")
-
-    else:
-        test_message = "I have been feeling really overwhelmed and stressed out lately."
-        result = get_intent(test_message)
-        print(f"Message: {test_message}")
-        print(f"Intent:  {result}")
-

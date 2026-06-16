@@ -1,15 +1,14 @@
 # Local
-import src.main as main
 from src.config import get_settings
-from src.intent_classifier import get_intent
-from src.rag_retriever import get_rag_response
+from src.services.llm import get_intent
+from src.services.translator import TranslatorService
 
 settings = get_settings()
 
 DIRECT_RESPONSES = {
-    "greeting": "Hello! I am here to listen. How are you doing today?",
-    "goodbye": "Take care. Remember, there is always support available if you need it.",
-    "gratitude": "You are very welcome. I am glad I could help.",
+    "greeting":    "Hello! I am here to listen. How are you doing today?",
+    "goodbye":     "Take care. Remember, there is always support available if you need it.",
+    "gratitude":   "You are very welcome. I am glad I could help.",
     "out_of_scope": "I am a mental health assistant. I cannot help with coding, general trivia, or physical medical advice. How can I support your mental well-being today?"
 }
 
@@ -19,120 +18,65 @@ MAX_HISTORY_TURNS = 10  # keep the last N exchanges (user + assistant = 2 msgs e
 conversation_history: dict[str, list[dict]] = {}
 
 
-def detect_language(text: str) -> str:
-    """Detects the language of the input text using a pre-trained model.
-    
+def process_chat(user_message: str, session_id: str = "", app_state=None) -> dict:
+    """Process a user message end-to-end and return a structured response dict.
+
     Args:
-        text (str): The input text whose language needs to be detected.
-        
+        user_message: The raw text received from the user.
+        session_id:   Optional session identifier for multi-turn history.
+        app_state:    The ``AppState`` instance populated during lifespan startup.
+
     Returns:
-        str: The detected language label (e.g., "en", "es", etc.).
+        A dict with keys: ``response``, ``intent``, ``emotion``, ``language``.
     """
-    try:
-        language = main.models["language"].predict([text])[0]
-        return language    
-    except Exception as e:
-        print(f"[ERROR] Language detection failed: {e}")
-        return "en"
+    classifier  = app_state.classifier
+    llm_client  = app_state.llm_client
+    rag_pipeline = app_state.rag_pipeline
 
+    translator = TranslatorService(llm_client=llm_client, model_name=settings.model_used_name)
 
-def detect_emotion(text: str) -> str:
-    """Detects the emotion expressed in the input text using a fine-tuned transformer model.
-    
-    Args:
-        text (str): The input text whose emotion needs to be detected.
-    Returns:
-        str: The detected emotion label (e.g., "joy", "sadness", "anger", etc.).
-    """
-    try:
-        result = main.models["emotion"](text)[0]
-        emotion = result["label"]
-        return emotion
-    except Exception as e:
-        print(f"[ERROR] Emotion detection failed: {e}")
-        return "neutral"
-    
+    # --- Step 1: Language detection & optional translation to English ---
+    language = classifier.detect_language(user_message).lower()
 
-def translate_to_english(text: str, source_lang: str) -> str:
-    """Translates text from the source language to English using a translation API .
-    
-    Args:
-        text (str): The input text in the source language.
-        source_lang (str): The language code of the input text (e.g., "es" for Spanish).
-        
-    Returns:
-        str: The translated text in English.
-    """
-    try:
-        response = main.models["llm_client"].chat.completions.create(
-            model=settings.model_used_name,
-            temperature=0.0,
-            messages=[
-                {"role": "system", "content": "You are a highly accurate translator. Translate the input text into English. Output ONLY the final English translation. Do not include any notes, quotes, explanations, or extra punctuation."},
-                {"role": "user", "content": text}
-            ]
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"[ERROR] Translation to English failed: {e}")
-        return text
-    
-
-def translate_from_english(text: str, target_language: str) -> str:
-    """Translates the final English response back to the user's native language code/name."""
-    try:
-        response = main.models["llm_client"].chat.completions.create(
-            model=settings.model_used_name,
-            temperature=0.0,
-            messages=[
-                {"role": "system", "content": f"Translate the following mental health response into the language specified: '{target_language}'. Maintain a warm, highly empathetic, and professional tone. Output ONLY the translation without any notes or metadata."},
-                {"role": "user", "content": text}
-            ]
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"[ERROR] Translation from English failed: {e}")
-        return text   
-
-
-def process_chat(user_message: str, session_id: str = "") -> dict:
-    language = detect_language(user_message).lower()
-    
-    if str(language) != 'en':
-        user_message = translate_to_english(user_message, source_lang=language)
+    if language != "en":
+        user_message = translator.to_english(user_message)
         print(f"[DEBUG] Translated input from {language} to English.")
-        
-    emotion = detect_emotion(user_message)
-    
-    intent = get_intent(user_message)
-    
+
+    # --- Step 2: Emotion detection ---
+    emotion = classifier.detect_emotion(user_message)
+
+    # --- Step 3: Intent classification ---
+    intent = get_intent(user_message, llm_client=llm_client)
+
     print(f"[DEBUG] lang={language} | emotion={emotion} | intent={intent}")
     print(f"[DEBUG] message='{user_message}'")
-    
-    # Get conversation history for this session
+
+    # --- Step 4: Retrieve conversation history ---
     history = conversation_history.get(session_id, []) if session_id else []
-    
+
+    # --- Step 5: Generate response ---
     if intent == "asking_mental_health_question":
-        response_text = get_rag_response(user_message, emotion=emotion, history=history)
+        response_text = rag_pipeline.generate_response(user_message, emotion=emotion, history=history)
     else:
         response_text = DIRECT_RESPONSES.get(intent, DIRECT_RESPONSES["out_of_scope"])
-    
-    # Save this exchange to conversation history
+
+    # --- Step 6: Persist conversation history ---
     if session_id:
         if session_id not in conversation_history:
             conversation_history[session_id] = []
-        conversation_history[session_id].append({"role": "user", "content": user_message})
+        conversation_history[session_id].append({"role": "user",      "content": user_message})
         conversation_history[session_id].append({"role": "assistant", "content": response_text})
         # Trim to keep only the last N turns (each turn = 2 messages)
         conversation_history[session_id] = conversation_history[session_id][-(MAX_HISTORY_TURNS * 2):]
-    
-    if str(language) != 'en':
-        response_text = translate_from_english(response_text, target_language=language)
+
+    # --- Step 7: Translate response back to original language if needed ---
+    if language != "en":
+        response_text = translator.from_english(response_text, target_language=language)
         print(f"[DEBUG] Translated response from English to {language}.")
-        
+
     return {
         "response": response_text,
-        "intent": intent,
-        "emotion": emotion,
+        "intent":   intent,
+        "emotion":  emotion,
         "language": language,
     }
