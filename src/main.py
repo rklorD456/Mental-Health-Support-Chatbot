@@ -17,7 +17,7 @@ import torch
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-
+from fastapi.staticfiles import StaticFiles
 
 from src.config import get_settings
 from src.core.schemas import ChatRequest, ChatResponse
@@ -111,7 +111,7 @@ async def lifespan(app: FastAPI):
     state.rag_pipeline = RAGPipeline(retriever, reranker, state.client, settings)
 
     logger.info("Loading language detection model...")
-    state.translator = TranslatorService(llm_client=state.client, model_name=settings.model_used_name)
+    state.translator = TranslatorService(llm_client=state.client, model_name=settings.model_used_name_translation)
     
     logger.info("Loading emotion & language classification models...")
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -147,7 +147,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
-
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request):

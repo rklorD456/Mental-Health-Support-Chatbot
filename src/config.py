@@ -17,10 +17,10 @@ class Settings:
     ## what model i wan to use for RAG
     model_used_api = lightning_api_key
     model_used_base_url = lightning_base_url
-    model_used_name = "openai/gpt-4o"
     
-    ## for intent classifier
+    model_used_name = "openai/gpt-4o"
     model_used_name_intent = "lightning-ai/gpt-oss-20b"
+    model_used_name_translation = "lightning-ai/gpt-oss-20b"
     
     ## for embedding
     embedding_model_name = "BAAI/bge-base-en-v1.5"

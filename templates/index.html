@@ -4,166 +4,54 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mental Health Support Chat</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f7f6;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-        }
-        .chat-container {
-            width: 100%;
-            max-width: 600px;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            height: 80vh;
-        }
-        .header {
-            background: #4A90E2;
-            color: white;
-            padding: 15px;
-            text-align: center;
-            font-size: 1.2em;
-        }
-        .chat-box {
-            flex-grow: 1;
-            padding: 20px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        .message {
-            max-width: 80%;
-            padding: 10px 15px;
-            border-radius: 20px;
-            line-height: 1.4;
-        }
-        .user-message {
-            align-self: flex-end;
-            background: #4A90E2;
-            color: white;
-            border-bottom-right-radius: 5px;
-        }
-        .bot-message {
-            align-self: flex-start;
-            background: #E5E5EA;
-            color: black;
-            border-bottom-left-radius: 5px;
-        }
-        .input-area {
-            display: flex;
-            padding: 15px;
-            background: #f9f9f9;
-            border-top: 1px solid #ddd;
-        }
-        input[type="text"] {
-            flex-grow: 1;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 20px;
-            outline: none;
-        }
-        button {
-            background: #4A90E2;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            margin-left: 10px;
-            border-radius: 20px;
-            cursor: pointer;
-        }
-        button:hover {
-            background: #357ABD;
-        }
-        .loading {
-            font-size: 0.8em;
-            color: #888;
-            align-self: center;
-            display: none;
-        }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
 
 <div class="chat-container">
-    <div class="header">🧠 Mental Health Assistant</div>
-    
-    <div class="chat-box" id="chat-box">
-        <div class="message bot-message">Hello! I am here to listen. How are you doing today?</div>
+    <div class="header">
+        <div class="header-title">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z"></path>
+                <path d="M12 8v4l3 3"></path>
+            </svg>
+            Support Assistant
+        </div>
+        <button class="reset-btn" onclick="resetChat()" title="Start New Session">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                <path d="M3 3v5h5"></path>
+            </svg>
+        </button>
     </div>
     
-    <div class="loading" id="loading-text">Bot is typing...</div>
+    <div class="chat-box" id="chat-box">
+        <div class="message-wrapper wrapper-bot">
+            <div class="message bot-message">Hello! I am here to listen and support you. How are you doing today?</div>
+        </div>
+    </div>
+    
+    <div class="typing-indicator" id="typing-indicator">
+        <div class="dots">
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+        </div>
+    </div>
 
     <div class="input-area">
-        <input type="text" id="user-input" placeholder="Type your message here..." onkeypress="handleKeyPress(event)">
-        <button onclick="sendMessage()">Send</button>
+        <input type="text" id="user-input" placeholder="Type your message here..." onkeypress="handleKeyPress(event)" autocomplete="off">
+        <button class="send-btn" onclick="sendMessage()" title="Send Message">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+        </button>
     </div>
 </div>
 
-<script>
-    // Generate a unique session ID for this browser tab
-    const SESSION_ID = crypto.randomUUID();
-
-    async function sendMessage() {
-        const inputField = document.getElementById("user-input");
-        const message = inputField.value.trim();
-        const chatBox = document.getElementById("chat-box");
-        const loadingText = document.getElementById("loading-text");
-
-        if (!message) return;
-
-        // 1. Add User Message to UI
-        appendMessage(message, "user-message");
-        inputField.value = ""; // Clear input
-        loadingText.style.display = "block"; // Show loading
-
-        try {
-            // 2. Send POST request to your FastAPI backend
-            const response = await fetch("/chat", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ message: message, session_id: SESSION_ID })
-            });
-
-            const data = await response.json();
-            
-            // 3. Add Bot Response to UI
-            appendMessage(data.response, "bot-message");
-
-        } catch (error) {
-            appendMessage("Sorry, I am having trouble connecting to the server.", "bot-message");
-        } finally {
-            loadingText.style.display = "none"; // Hide loading
-        }
-    }
-
-    function appendMessage(text, className) {
-        const chatBox = document.getElementById("chat-box");
-        const msgDiv = document.createElement("div");
-        msgDiv.className = `message ${className}`;
-        msgDiv.innerText = text;
-        chatBox.appendChild(msgDiv);
-        
-        // Auto-scroll to the bottom
-        chatBox.scrollTop = chatBox.scrollHeight;
-    }
-
-    // Allow pressing "Enter" to send
-    function handleKeyPress(event) {
-        if (event.key === "Enter") {
-            sendMessage();
-        }
-    }
-</script>
+<script src="/static/js/script.js"></script>
 
 </body>
 </html>
