@@ -17,7 +17,7 @@ import torch
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from transformers import pipeline
+
 
 from src.config import get_settings
 from src.core.schemas import ChatRequest, ChatResponse
@@ -28,18 +28,23 @@ from src.rag.retriever import HybridQdrantRetriever
 from src.rag.reranker import CrossEncoderReranker
 from src.rag.pipeline import RAGPipeline
 
-from src.services.intent import get_llm_client
 from src.services.classifier import ClassifierService
 from src.services.translator import TranslatorService
 from src.services.guardrail import GuardrailService
 from src.router import process_chat
 
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 templates = Jinja2Templates(directory=str(settings.templates_dir))
 
- 
+
+client = OpenAI(
+    api_key=settings.model_used_api, 
+    base_url=settings.model_used_base_url
+)
+    
 ##--------------------------------------------------
 ## --- Application state ---
 ##--------------------------------------------------
@@ -55,7 +60,7 @@ class AppState:
         self.classifier : ClassifierService | None = None
         self.translator : TranslatorService | None = None
         self.guardrail : GuardrailService | None = None
-        self.llm_client : object | None = None
+        self.client : OpenAI | None = None
         self.executor : ThreadPoolExecutor | None = None
 
     def is_ready(self) -> bool:
@@ -65,7 +70,7 @@ class AppState:
             self.classifier,
             self.translator,
             self.guardrail,
-            self.llm_client,
+            self.client,
             self.executor,
         ])
         
@@ -85,7 +90,10 @@ async def lifespan(app: FastAPI):
         raise ValueError("Model API Key or Base URL not found in environment variables.")
 
     logger.info("Initializing LLM client...")
-    state.llm_client = get_llm_client()
+    state.client =  OpenAI(
+                        api_key=settings.model_used_api, 
+                        base_url=settings.model_used_base_url
+                    )
 
     logger.info("Connecting to Qdrant...")
     qdrant_client = get_qdrant_client()
@@ -100,10 +108,10 @@ async def lifespan(app: FastAPI):
     reranker = CrossEncoderReranker("cross-encoder/ms-marco-MiniLM-L-6-v2")
 
     logger.info("Setting up RAG pipeline...")
-    state.rag_pipeline = RAGPipeline(retriever, reranker, state.llm_client, settings)
+    state.rag_pipeline = RAGPipeline(retriever, reranker, state.client, settings)
 
     logger.info("Loading language detection model...")
-    state.translator = TranslatorService(llm_client=state.llm_client, model_name=settings.model_used_name)
+    state.translator = TranslatorService(llm_client=state.client, model_name=settings.model_used_name)
     
     logger.info("Loading emotion & language classification models...")
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -113,6 +121,7 @@ async def lifespan(app: FastAPI):
         device=device,          # type: ignore[arg-type]
         confidence_threshold=0.65,
     )
+    
     
     logger.info("Setting up safety guardrails...")
     state.guardrail = GuardrailService()
@@ -147,7 +156,7 @@ def read_root(request: Request):
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok" if state.is_ready() else "inittializing",
+    return {"status": "ok" if state.is_ready() else "initializing",
             "pipeline_loaded": hasattr(state, "rag_pipeline"),
             "classifier_loaded": hasattr(state, "classifier"),
             "translator_loaded": hasattr(state, "translator"),

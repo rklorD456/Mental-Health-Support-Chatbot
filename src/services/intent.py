@@ -44,14 +44,6 @@ EXAMPLES:
 """
 
 
-def get_llm_client() -> OpenAI:
-    """Create and return an OpenAI-compatible LLM client using application settings."""
-    return OpenAI(
-        api_key=settings.model_used_api,
-        base_url=settings.model_used_base_url,
-    )
-
-
 def get_intent(user_message: str, llm_client: OpenAI, retries: int = 3) -> str:
     """Classify the intent of a user message via the LLM.
 

@@ -7,7 +7,7 @@ class GuardrailService:
         # --- Prompt injection & jailbreak signatures ---
         self.injection_patterns = [
             # Original patterns
-            r"ignore\s+(any|all)?\s*previous\s+instructions",
+            r"ignore\s+(any|all|the|your|prior)?\s*previous\s+instructions",
             r"system\s+override",
             r"forget\s+(your|the)?\s*rules",
             r"you\s+are\s+now\s+a",
