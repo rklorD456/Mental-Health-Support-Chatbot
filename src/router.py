@@ -1,6 +1,6 @@
-# Local
+from concurrent.futures import ThreadPoolExecutor
 from src.config import get_settings
-from src.services.llm import get_intent
+from src.services.intent import get_intent
 
 settings = get_settings()
 
@@ -13,9 +13,10 @@ DIRECT_RESPONSES = {
 
 # In-memory conversation history keyed by session_id.
 # Each value is a list of {"role": "user"|"assistant", "content": str} dicts.
-MAX_HISTORY_TURNS = 10  # keep the last N exchanges (user + assistant = 2 msgs each)
+MAX_HISTORY_TURNS = 10  # Max user-assistant pairs to keep in history
 conversation_history: dict[str, list[dict]] = {}
 
+executor = ThreadPoolExecutor(max_workers=2)
 
 def process_chat(user_message: str, session_id: str = "", app_state=None) -> dict:
     """Process a user message end-to-end and return a structured response dict.
@@ -40,12 +41,15 @@ def process_chat(user_message: str, session_id: str = "", app_state=None) -> dic
         user_message = translator.to_english(user_message)
         print(f"[DEBUG] Translated input from {language} to English.")
 
-    # ---  Emotion detection ---
-    emotion = classifier.detect_emotion(user_message)
 
-    # ---  Intent classification ---
-    intent = get_intent(user_message, llm_client=llm_client)
-
+    # --- Run Emotion detection & Intent classification in parallel ---
+    future_emotion = executor.submit(classifier.detect_emotion, user_message)
+    future_intent = executor.submit(get_intent, user_message, llm_client=llm_client)
+    
+    # Collect the results as they finish
+    emotion = future_emotion.result()
+    intent = future_intent.result()
+    
     print(f"[DEBUG] lang={language} | emotion={emotion} | intent={intent}")
     print(f"[DEBUG] message='{user_message}'")
 
@@ -54,7 +58,9 @@ def process_chat(user_message: str, session_id: str = "", app_state=None) -> dic
 
     # ---  Generate response ---
     if intent == "asking_mental_health_question":
-        response_text = rag_pipeline.generate_response(user_message, emotion=emotion, history=history)
+        response_text = rag_pipeline.generate_response(user_message, 
+                                                       emotion=emotion, 
+                                                       history=history)
     else:
         response_text = DIRECT_RESPONSES.get(intent, DIRECT_RESPONSES["out_of_scope"])
 

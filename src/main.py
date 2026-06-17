@@ -25,7 +25,7 @@ from src.rag.retriever import HybridQdrantRetriever
 from src.rag.reranker import CrossEncoderReranker
 from src.rag.pipeline import RAGPipeline
 
-from src.services.llm import get_llm_client
+from src.services.intent import get_llm_client
 from src.services.classifier import ClassifierService
 from src.services.translator import TranslatorService
 
@@ -77,6 +77,7 @@ async def lifespan(app: FastAPI):
         language_model_path=str(settings.abs_language_model_path),
         emotion_model_path=str(settings.abs_emotion_model_path),
         device=device, #type: ignore
+        confidence_threshold=0.65,
     )
 
     print("All models loaded. API is ready.\n")

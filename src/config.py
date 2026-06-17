@@ -18,10 +18,14 @@ class Settings:
     model_used_api = lightning_api_key
     model_used_base_url = lightning_base_url
     model_used_name = "openai/gpt-4o"
+    
+    ## for intent classifier
+    model_used_name_intent = "lightning-ai/gpt-oss-20b"
+    
     ## for embedding
     embedding_model_name = "BAAI/bge-base-en-v1.5"
     collection_name = "mental_health_knowledge_base"
-    temperature = 0.3
+    model_used_temperature = 0.3
     
     
     abs_language_model_path = PROJECT_ROOT / "models" / "language_detector_v1.1.joblib"
