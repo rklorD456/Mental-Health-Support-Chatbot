@@ -14,6 +14,7 @@ DIRECT_RESPONSES = {
 # In-memory conversation history keyed by session_id.
 # Each value is a list of {"role": "user"|"assistant", "content": str} dicts.
 MAX_HISTORY_TURNS = 10  # Max user-assistant pairs to keep in history
+MAX_SESSIONS = 200  # Max unique session histories to keep in memory
 conversation_history: dict[str, list[dict]] = {}
 
 executor = ThreadPoolExecutor(max_workers=2)
@@ -29,6 +30,8 @@ def process_chat(user_message: str, session_id: str = "", app_state=None) -> dic
     Returns:
         A dict with keys: ``response``, ``intent``, ``emotion``, ``language``.
     """
+    
+    
     classifier  = app_state.classifier
     llm_client  = app_state.llm_client
     rag_pipeline = app_state.rag_pipeline
@@ -41,7 +44,21 @@ def process_chat(user_message: str, session_id: str = "", app_state=None) -> dic
         user_message = translator.to_english(user_message)
         print(f"[DEBUG] Translated input from {language} to English.")
 
-
+    # --- RUN SECURITY GUARDRAILS ---
+    if not app_state.guardrail.is_safe(user_message):
+        print(f"[SECURITY ALERT] Prompt injection attempt blocked: {user_message}")
+        
+        rejection_text = "I cannot fulfill this request. I am here exclusively to support your mental well-being."
+        if language != "en":
+            rejection_text = translator.from_english(rejection_text, target_language=language)
+            
+        return {
+            "response": rejection_text,
+            "intent": "out_of_scope",
+            "emotion": "neutral",
+            "language": "en"
+        }
+        
     # --- Run Emotion detection & Intent classification in parallel ---
     future_emotion = executor.submit(classifier.detect_emotion, user_message)
     future_intent = executor.submit(get_intent, user_message, llm_client=llm_client)
@@ -66,8 +83,13 @@ def process_chat(user_message: str, session_id: str = "", app_state=None) -> dic
 
     # ---  Persist conversation history ---
     if session_id:
+        if len(conversation_history) > MAX_SESSIONS and session_id not in conversation_history:
+            oldest_session = next(iter(conversation_history))
+            del conversation_history[oldest_session]
+            
         if session_id not in conversation_history:
             conversation_history[session_id] = []
+            
         conversation_history[session_id].append({"role": "user", "content": user_message})
         conversation_history[session_id].append({"role": "assistant", "content": response_text})
         conversation_history[session_id] = conversation_history[session_id][-(MAX_HISTORY_TURNS * 2):]

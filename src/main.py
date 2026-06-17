@@ -28,6 +28,7 @@ from src.rag.pipeline import RAGPipeline
 from src.services.intent import get_llm_client
 from src.services.classifier import ClassifierService
 from src.services.translator import TranslatorService
+from src.services.guardrail import GuardrailService
 
 settings = get_settings()
 templates = Jinja2Templates(directory=str(settings.templates_dir))
@@ -37,6 +38,7 @@ class AppState:
     rag_pipeline: RAGPipeline
     classifier: ClassifierService
     translator: TranslatorService
+    guardrail: GuardrailService
     llm_client: object  # openai.OpenAI
 
 
@@ -79,7 +81,10 @@ async def lifespan(app: FastAPI):
         device=device, #type: ignore
         confidence_threshold=0.65,
     )
-
+    
+    print("Setting up safety guardrails...")
+    state.guardrail = GuardrailService()
+    
     print("All models loaded. API is ready.\n")
     yield
     print("Shutting down.")
