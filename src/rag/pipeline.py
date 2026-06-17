@@ -43,7 +43,7 @@ class RAGPipeline:
         
         response = self.llm_client.chat.completions.create(
             model=self.settings.model_used_name,
-            temperature=self.settings.temperature,
+            temperature=self.settings.model_used_temperature,
             messages=messages,
         )
         return response.choices[0].message.content
