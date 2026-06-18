@@ -9,13 +9,30 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 
 
 import logging
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 import asyncio
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+# Only show DEBUG logs for our own application code
+logging.getLogger("src").setLevel(logging.DEBUG)
+
+# Silence noisy third-party logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("openai").setLevel(logging.WARNING)
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+
 import torch
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 
@@ -59,14 +76,16 @@ class AppState:
 
     def is_ready(self) -> bool:
         """Check if all components are initialised."""
-        return all([
-            self.rag_pipeline,
-            self.classifier,
-            self.translator,
-            self.guardrail,
-            self.client,
-            self.executor,
-        ])
+        return all(
+            x is not None for x in [
+                self.rag_pipeline,
+                self.classifier,
+                self.translator,
+                self.guardrail,
+                self.client,
+                self.executor,
+            ]
+        )
         
 
 state = AppState()
@@ -91,6 +110,7 @@ async def lifespan(app: FastAPI):
 
     logger.info("Connecting to Qdrant...")
     qdrant_client = get_qdrant_client()
+    qdrant_client.get_collections()  # fail fast if Qdrant is unreachable
 
     logger.info("Loading embedding model...")
     embedder = SentenceTransformerEmbedder(settings.embedding_model_name)
@@ -129,8 +149,9 @@ async def lifespan(app: FastAPI):
     yield
 
     ## Clean shutdown of resources happens here after the server stops accepting requests.
-    logger.info("Shutting down executor...")
+    logger.info("Shutting down...")
     state.executor.shutdown(wait=True)
+    qdrant_client.close()
     logger.info("Shutdown complete.")
 
 
@@ -141,7 +162,15 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
-app.mount("/static", StaticFiles(directory="static"), name="static")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
+app.mount("/static", StaticFiles(directory=str(settings.templates_dir.parent / "static")), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request):
@@ -150,11 +179,19 @@ def read_root(request: Request):
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok" if state.is_ready() else "initializing",
-            "pipeline_loaded": hasattr(state, "rag_pipeline"),
-            "classifier_loaded": hasattr(state, "classifier"),
-            "translator_loaded": hasattr(state, "translator"),
-            "guardrail_loaded": hasattr(state, "guardrail")}
+    return {
+        "status": "ok" if state.is_ready() else "initializing",
+        "pipeline_loaded": state.rag_pipeline is not None,
+        "classifier_loaded": state.classifier is not None,
+        "translator_loaded": state.translator is not None,
+        "guardrail_loaded": state.guardrail is not None,
+    }
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error("Unhandled error on %s %s: %s", request.method, request.url.path, exc, exc_info=True)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -169,7 +206,7 @@ async def chat(request: ChatRequest):
     if not state.is_ready():
         raise HTTPException(status_code=503, detail="Service is still initializing. Please retry shortly.")
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(
         state.executor,
         lambda: process_chat(user_message, session_id=session_id, app_state=state),

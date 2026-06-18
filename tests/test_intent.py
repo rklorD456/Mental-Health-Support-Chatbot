@@ -1,11 +1,8 @@
-import os
-import sys
 import time
-from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.append(str(PROJECT_ROOT))
+from openai import OpenAI
 
+from src.config import get_settings
 from src.services.intent import get_intent
 
 TEST_DATA = {
@@ -143,12 +140,16 @@ TEST_DATA = {
 
 
 def run_intent_tests():
+    settings = get_settings()
+    llm_client = OpenAI(
+        api_key=settings.model_used_api,
+        base_url=settings.model_used_base_url
+    )
 
     passed = 0
     failed = 0
 
     # group results by category for a cleaner report
-    results_by_category = {}
 
     print("\nrunning intent prompt evaluation...\n")
     print(f"{'User Message':<65} | {'Expected':<30} | {'Predicted':<30} | Status")
@@ -156,7 +157,7 @@ def run_intent_tests():
 
     for i, (message, expected) in enumerate(TEST_DATA.items()):
         try:
-            predicted = get_intent(message)
+            predicted = get_intent(message, llm_client=llm_client)
             status = "PASS" if predicted == expected else "FAIL"
             if predicted == expected:
                 passed += 1

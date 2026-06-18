@@ -5,6 +5,7 @@ fast keyword matching, RAG response generation, and conversation history managem
 """
 
 import hashlib
+import logging
 import threading
 from collections import OrderedDict
  
@@ -13,6 +14,7 @@ from src.services.intent import get_intent
 from src.core.responses import detect_intent_from_keywords, get_dynamic_response
  
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 # In-memory conversation history .
@@ -96,7 +98,7 @@ def process_chat(user_message: str, session_id: str = "", app_state=None) -> dic
     
     # --- FAST PRE-PROCESSING (Low-Effort Filter) ---
     if is_meaningless_input(user_message):
-        print(f"[DEBUG] Blocked meaningless input: '{user_message}'")
+        logger.debug("Blocked meaningless input: '%s'", user_message)
         fallback_response = "I didn't quite catch that. Could you please tell me a bit more about what's on your mind?"
         return {
             "response": fallback_response,
@@ -112,7 +114,7 @@ def process_chat(user_message: str, session_id: str = "", app_state=None) -> dic
     # --- 3. FAST KEYWORD MATCH (O(1) dictionary bypass) ---
     fast_intent = detect_intent_from_keywords(original_message)
     if fast_intent:
-        print(f"[DEBUG] Quick match triggered -> {fast_intent}")
+        logger.debug("Quick match triggered -> %s", fast_intent)
         response_text = get_dynamic_response(fast_intent, language)
         
         _update_history(session_id, original_message, response_text)
@@ -125,14 +127,14 @@ def process_chat(user_message: str, session_id: str = "", app_state=None) -> dic
         
     if language != "en":
         user_message = translator.to_english(user_message)
-        print(f"[DEBUG] Translated input from {language} to English.")
+        logger.debug("Translated input from %s to English.", language)
 
 
     # --- RUN SECURITY GUARDRAILS ---
     if not app_state.guardrail.is_safe(user_message):
         # Hash the payload instead of logging raw text to prevent log injection
         payload_hash = hashlib.sha256(user_message.encode()).hexdigest()[:16]
-        print(f"[SECURITY ALERT] Prompt injection blocked. hash={payload_hash}")
+        logger.warning("Prompt injection blocked. hash=%s", payload_hash)
         
         rejection_text = get_dynamic_response("out_of_scope", language)
  
@@ -151,17 +153,17 @@ def process_chat(user_message: str, session_id: str = "", app_state=None) -> dic
     try:
         emotion = future_emotion.result(timeout=10)
     except Exception as e:
-        print(f"[WARNING] Emotion detection failed ({e}); defaulting to 'neutral'.")
+        logger.warning("Emotion detection failed (%s); defaulting to 'neutral'.", e)
         emotion = "neutral"
  
     try:
         intent = future_intent.result(timeout=10)
     except Exception as e:
-        print(f"[WARNING] Intent classification failed ({e}); defaulting to 'out_of_scope'.")
+        logger.warning("Intent classification failed (%s); defaulting to 'out_of_scope'.", e)
         intent = "out_of_scope"
  
-    print(f"[DEBUG] lang={language} | emotion={emotion} | intent={intent}")
-    print(f"[DEBUG] message='{user_message}'")
+    logger.debug("lang=%s | emotion=%s | intent=%s", language, emotion, intent)
+    logger.debug("message='%s'", user_message)
 
     # ---  Retrieve conversation history ---
     with _history_lock:
@@ -177,7 +179,7 @@ def process_chat(user_message: str, session_id: str = "", app_state=None) -> dic
         
         if language != "en":
                     response_text = translator.from_english(response_text, target_language=language)
-                    print(f"[DEBUG] Translated RAG response from English to {language}.")
+                    logger.debug("Translated RAG response from English to %s.", language)
     else:
         # If it's a normal intent that the LLM caught (but missed the fast keyword filter),
         # pull a native dynamic response so we don't have to translate it.

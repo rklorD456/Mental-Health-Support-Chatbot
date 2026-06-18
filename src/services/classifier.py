@@ -25,7 +25,7 @@ class ClassifierService:
             
             if max_prob < self.confidence_threshold:
                 logger.debug(
-                    "Low confidence in language detection (%.2f). Defaulting to 'en'.", 
+                    "Low confidence in language detection (%.2f < threshold %.2f). Defaulting to 'en'.", 
                     max_prob,
                     self.confidence_threshold,
                 )

@@ -11,7 +11,12 @@ from pydantic import BaseModel, Field
 class ChatRequest(BaseModel):
     """Incoming user message."""
     message: str = Field(..., min_length=1, description="User message text")
-    session_id: str = Field(default="", description="Session ID for conversation history")
+    session_id: str = Field(
+        default="",
+        max_length=64,
+        pattern=r"^[a-zA-Z0-9\-]*$",
+        description="Session ID for conversation history",
+    )
 
 
 class ChatResponse(BaseModel):

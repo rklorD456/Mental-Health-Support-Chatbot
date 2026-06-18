@@ -1,4 +1,5 @@
 # Standard library
+import logging
 import uuid
 
 # Third-party
@@ -10,52 +11,65 @@ from sentence_transformers import SentenceTransformer
 from src.config import get_settings
 from src.database.qdrant import get_qdrant_client, ensure_collection
 
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
 settings = get_settings()
 
 COLLECTION_NAME = settings.collection_name
 BATCH_SIZE = 100
+ENCODE_BATCH_SIZE = 256
 
-print("1. Connecting to Qdrant and loading Sentence Transformer...")
+logger.info("1. Connecting to Qdrant and loading Sentence Transformer...")
 qdrant_client = get_qdrant_client()
 
-print("Loading BGE model...")
+logger.info("Loading BGE model...")
 embedding_model = SentenceTransformer(settings.embedding_model_name)
 
 ensure_collection(qdrant_client, COLLECTION_NAME, vector_size=768)
 
-print("Downloading dataset...")
+logger.info("Downloading dataset...")
 dataset = load_dataset("Amod/mental_health_counseling_conversations", split="train")
 
-print(f"Loaded {len(dataset)} conversations. Starting vector ingestion...")
+logger.info("Loaded %d conversations. Starting vector ingestion...", len(dataset))
 
-points = []
+# Process in batches for efficient encoding
+for batch_start in range(0, len(dataset), ENCODE_BATCH_SIZE):
+    batch_end = min(batch_start + ENCODE_BATCH_SIZE, len(dataset))
+    batch_rows = dataset[batch_start:batch_end]
 
-for i, row in enumerate(dataset):
-    question = row["Context"]
-    answer   = row["Response"]
+    texts_to_embed = [
+        f"Patient Context: {q}\nCounselor Response: {a}"
+        for q, a in zip(batch_rows["Context"], batch_rows["Response"])
+    ]
 
-    text_to_embed = f"Patient Context: {question}\nCounselor Response: {answer}"
-    vector = embedding_model.encode(text_to_embed).tolist()
+    vectors = embedding_model.encode(texts_to_embed, show_progress_bar=False).tolist()
 
-    point = models.PointStruct(
-        id=str(uuid.uuid4()),
-        vector=vector,
-        payload={
-            "question":     question,
-            "answer":       answer,
-            "page_content": text_to_embed,
-        },
-    )
-    points.append(point)
+    points = [
+        models.PointStruct(
+            id=str(uuid.uuid4()),
+            vector=vec,
+            payload={
+                "question": q,
+                "answer": a,
+                "page_content": t,
+            },
+        )
+        for vec, q, a, t in zip(
+            vectors,
+            batch_rows["Context"],
+            batch_rows["Response"],
+            texts_to_embed,
+        )
+    ]
 
-    # Upload in batches
-    if len(points) >= BATCH_SIZE:
-        qdrant_client.upsert(collection_name=COLLECTION_NAME, points=points)
-        print(f"Upserted batch ending at row {i + 1}...")
-        points = []
+    # Upsert in sub-batches of BATCH_SIZE to respect Qdrant limits
+    for i in range(0, len(points), BATCH_SIZE):
+        qdrant_client.upsert(
+            collection_name=COLLECTION_NAME,
+            points=points[i : i + BATCH_SIZE],
+        )
 
-# Upload any remaining points
-if points:
-    qdrant_client.upsert(collection_name=COLLECTION_NAME, points=points)
+    logger.info("Upserted rows %d–%d of %d", batch_start + 1, batch_end, len(dataset))
 
-print("Ingestion complete!")
+logger.info("Ingestion complete!")

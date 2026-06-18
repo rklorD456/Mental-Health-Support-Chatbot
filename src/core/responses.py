@@ -341,7 +341,7 @@ MULTI_LINGUAL_RESPONSES = {
             "Salve. Come ti senti in questo momento?"
         ],
         "goodbye": [
-            "Prenditi cura di te. Ricorda wild che il supporto è sempre disponibile se ne hai bisogno.",
+            "Prenditi cura di te. Ricorda che il supporto è sempre disponibile se ne hai bisogno.",
             "Arrivederci per ora. Ti auguro una giornata tranquilla."
         ],
         "gratitude": [
