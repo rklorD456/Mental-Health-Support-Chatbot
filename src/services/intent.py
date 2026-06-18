@@ -1,5 +1,6 @@
 # Standard library
 import json
+import logging
 import time
 
 # Third-party
@@ -10,6 +11,7 @@ from pydantic import ValidationError
 from src.config import get_settings
 from src.core.schemas import IntentResponse
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
@@ -47,6 +49,7 @@ client = OpenAI(
     api_key=settings.lightning_api_key,
     base_url=settings.lightning_base_url,
 )
+
 def get_intent(user_message: str, llm_client: OpenAI=client, retries: int = 3) -> str:
     """Classify the intent of a user message via the LLM.
 
@@ -72,13 +75,13 @@ def get_intent(user_message: str, llm_client: OpenAI=client, retries: int = 3) -
                     {"role": "user",   "content": formatted_input},
                 ],
             )
-            raw_json = response.choices[0].message.content
+            raw_json = response.choices[0].message.content or ""
             parsed_data = json.loads(raw_json)
             validated = IntentResponse(**parsed_data)
             return validated.intent
 
         except (ValidationError, json.JSONDecodeError) as err:
-            print(f"[WARNING] Attempt {attempt + 1} failed parsing JSON/Validation: {err}")
+            logger.warning("Attempt %d failed parsing JSON/Validation: %s", attempt + 1, err)
             if attempt < retries - 1:
                 time.sleep(2 ** attempt)
             else:
@@ -88,7 +91,7 @@ def get_intent(user_message: str, llm_client: OpenAI=client, retries: int = 3) -
             if "json_validate_failed" in str(e):
                 return "asking_mental_health_question"
             
-            print(f"[ERROR] Attempt {attempt + 1} failed with API connection error: {e}")
+            logger.error("Attempt %d failed with API connection error: %s", attempt + 1, e)
             if attempt < retries - 1:
                 time.sleep(2 ** attempt)
             else:

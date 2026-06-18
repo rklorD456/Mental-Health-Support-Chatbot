@@ -1,10 +1,11 @@
+import logging
 from typing import List, Optional
 from src.core.interfaces import BaseRetriever, BaseReranker
 
+logger = logging.getLogger(__name__)
+
 class RAGPipeline:
-    """summary
-    A pipeline that combines retrieval, reranking, and response generation for a mental health support chatbot.
-    """
+    """A pipeline that combines retrieval, reranking, and response generation for a mental health support chatbot."""
     
     def __init__(self, retriever: BaseRetriever, reranker: BaseReranker, llm_client, settings):
         self.retriever = retriever
@@ -24,6 +25,7 @@ class RAGPipeline:
         
         fused_candidates = self.retriever.retrieve(user_message, top_k=10)
         if not fused_candidates:
+            logger.warning("No relevant documents found.")
             return "I am having trouble accessing my knowledge base right now."
             
         top_results = self.reranker.rerank(user_message, fused_candidates, top_n=3)
@@ -41,9 +43,15 @@ class RAGPipeline:
         
         messages = [{"role": "system", "content": system_prompt}] + history + [{"role": "user", "content": user_message}]
         
-        response = self.llm_client.chat.completions.create(
-            model=self.settings.model_used_name,
-            temperature=self.settings.model_used_temperature,
-            messages=messages,
-        )
-        return response.choices[0].message.content
+        
+        try:
+            response = self.llm_client.chat.completions.create(
+                model=self.settings.model_used_name,
+                temperature=self.settings.model_used_temperature,
+                messages=messages,
+            )
+            return response.choices[0].message.content
+        
+        except Exception as e:
+            logger.error("LLM response generation failed: %s", e)
+            return "I'm sorry, I'm having trouble generating a response right now."

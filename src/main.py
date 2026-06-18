@@ -39,12 +39,6 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 templates = Jinja2Templates(directory=str(settings.templates_dir))
 
-
-client = OpenAI(
-    api_key=settings.model_used_api, 
-    base_url=settings.model_used_base_url
-)
-    
 ##--------------------------------------------------
 ## --- Application state ---
 ##--------------------------------------------------
