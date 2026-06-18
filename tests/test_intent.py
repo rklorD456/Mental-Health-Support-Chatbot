@@ -6,7 +6,6 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-from openai import OpenAI
 from src.services.intent import get_intent
 
 TEST_DATA = {
@@ -144,15 +143,6 @@ TEST_DATA = {
 
 
 def run_intent_tests():
-    print("connecting to llm client...")
-    try:
-        client = OpenAI(
-            api_key=os.getenv("LIGHTNING_API_KEY"),
-            base_url=os.getenv("https://lightning.ai/api/v1"),
-        )
-    except Exception as e:
-        print(f"failed to initialize client: {e}")
-        return
 
     passed = 0
     failed = 0
@@ -166,7 +156,7 @@ def run_intent_tests():
 
     for i, (message, expected) in enumerate(TEST_DATA.items()):
         try:
-            predicted = get_intent(message, client)
+            predicted = get_intent(message)
             status = "PASS" if predicted == expected else "FAIL"
             if predicted == expected:
                 passed += 1

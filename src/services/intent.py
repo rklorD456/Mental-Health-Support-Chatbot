@@ -43,8 +43,11 @@ EXAMPLES:
 "I've been feeling really anxious lately." → {"intent": "asking_mental_health_question"}
 """
 
-
-def get_intent(user_message: str, llm_client: OpenAI, retries: int = 3) -> str:
+client = OpenAI(
+    api_key=settings.lightning_api_key,
+    base_url=settings.lightning_base_url,
+)
+def get_intent(user_message: str, llm_client: OpenAI=client, retries: int = 3) -> str:
     """Classify the intent of a user message via the LLM.
 
     Args:
