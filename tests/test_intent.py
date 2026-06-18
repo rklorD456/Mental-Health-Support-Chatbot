@@ -6,7 +6,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-from src.services.intent import get_intent, get_llm_client
+from openai import OpenAI
+from src.services.intent import get_intent
 
 TEST_DATA = {
     # ── original cases ────────────────────────────────────────────────────────
@@ -145,7 +146,10 @@ TEST_DATA = {
 def run_intent_tests():
     print("connecting to llm client...")
     try:
-        client = get_llm_client()
+        client = OpenAI(
+            api_key=os.getenv("LIGHTNING_API_KEY"),
+            base_url=os.getenv("https://lightning.ai/api/v1"),
+        )
     except Exception as e:
         print(f"failed to initialize client: {e}")
         return
